@@ -70,10 +70,12 @@ func (p *Plugin) Control(w http.ResponseWriter, r *http.Request) {
 	log.Println("node ID: " + xreq.NodeID)
 	log.Println("control ID: " + xreq.Control)
 
-	switch {
-		case xreq.Control == "clearroutes": clearRoutes(xreq.NodeID)
-		case xreq.Control == "increase": adjustWeight(xreq.NodeID, 0.1)
-		case xreq.Control == "decrease": adjustWeight(xreq.NodeID, -0.1)
+	switch  {
+		case p.ID == "a8routing": switch {
+			case xreq.Control == "clearroutes": clearRoutes(xreq.NodeID)
+			case xreq.Control == "increase": adjustWeight(xreq.NodeID, 0.1)
+			case xreq.Control == "decrease": adjustWeight(xreq.NodeID, -0.1)
+		}
 	}
 
 	rpt, err := p.makeReport()

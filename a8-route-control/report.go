@@ -29,6 +29,7 @@ type node struct {
 	Metrics        map[string]metric       `json:"metrics"`
 	LatestControls map[string]controlEntry `json:"latestControls,omitempty"`
 	AdjacencyList []string `json:"adjacency",omitempty`
+	Edges map[string]EdgeMetadata `json:"edges,omitempty"`
 	Rank string `json:rank,omitempty`
 }
 
@@ -75,55 +76,113 @@ type pluginSpec struct {
 	APIVersion  string   `json:"api_version,omitempty"`
 }
 
-func (p *Plugin) makeReport() (*report, error) {
-	// Add the container IDs to the map of nodes in the report
+var latestRouteReport *report
+var latestConnectionReport *report 
+
+func (p *Plugin) buildLatestReport() {
+	log.Println("build latest ........................................................")
+		// Add the container IDs to the map of nodes in the report
 	m := make(map[string]node)
-	log.Println("making report")
+	log.Println("making ", p.ID, " report")
 
+	if len(serviceInstancesByContainerID) == 0 {
+		log.Println("no services found")
+	}
 	for _, v := range serviceInstancesByContainerID {
+		
 		key := v.ContainerID + ";<container>"
-
-		metrics, weightValue, err := p.routingPercentage(v)
-		if metrics == nil {
-			//log.Println("skipping")
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		v.Weight = weightValue
-		//log.Println(v.Weight)
-
-		p.routesEnabled = true
-
-		m[key] = node { 
-			Metrics:        metrics,
-			LatestControls: p.latestControls(),
-			AdjacencyList: []string{""},
-			Rank: "8",
+		switch {
+			case p.ID == "a8routing": {
+				metrics, weightValue, _ := p.routingPercentage(v)
+				if metrics == nil {
+					//log.Println("skipping")
+					continue
+				}/*
+				if err != nil {
+					return nil, err
+				}*/
+				v.Weight = weightValue
+				//log.Println(v.Weight)
+				p.routesEnabled = true
+				m[key] = node { 
+					Metrics:        metrics,
+					LatestControls: p.latestControls(),
+					AdjacencyList: []string{""},
+					Rank: "8",
+				}
+			}
+			case p.ID == "a8connections": {
+				if p.ActualConnections == true {
+					if len(v.LatestAdjacencyList) > 0 {
+						log.Println("adjacency list:")
+						log.Println(v.LatestAdjacencyList)
+						m[key] = node { 
+							LatestControls: p.latestControls(),
+							AdjacencyList: v.LatestAdjacencyList,
+							Rank: "8",
+						}
+					}
+				} else {
+					if len(v.DesiredAdjacencyList) > 0 {
+						log.Println("adjacency list:")
+						log.Println(v.DesiredAdjacencyList)
+						m[key] = node { 
+							LatestControls: p.latestControls(),
+							AdjacencyList: v.DesiredAdjacencyList,
+							Rank: "8",
+						}
+					}
+				}
+			}
 		}
 	}
 
-	//[]string{"93bacc03b31df77768b47d9a5458946e22ddcc077468822fa0efa5da419ecb76;<container>"},
-
-	rpt := &report{
-		Container: topology{
-			Nodes: m,
-			MetricTemplates: p.metricTemplates(),
-			Controls:        p.controls(),
-			//TableTemplates: getTableTemplate(),
-		},
-		Plugins: []pluginSpec{
-			{
-				ID:          "a8routing",
-				Label:       "a8routing",
-				Description: "Adds routing to different versions of a microservice",
-				Interfaces:  []string{"reporter", "controller"},
-				APIVersion:  "1",
+	if p.ID == "a8routing" {
+		latestRouteReport = &report{
+			Container: topology{
+				Nodes: m,
+				MetricTemplates: p.metricTemplates(),
+				Controls:        p.controls(),
+				//TableTemplates: getTableTemplate(),
 			},
-		},
+			Plugins: []pluginSpec{
+				{
+					ID:          p.ID,//"a8routing",
+					Label:       p.Label,//"a8routing",
+					Description: p.Description,//"Adds routing to different versions of a microservice",
+					Interfaces:  []string{"reporter", "controller"},
+					APIVersion:  "1",
+				},
+			},
+		}
+	} else {
+		latestConnectionReport = &report{
+			Container: topology{
+				Nodes: m,
+				MetricTemplates: p.metricTemplates(),
+				Controls:        p.controls(),
+				//TableTemplates: getTableTemplate(),
+			},
+			Plugins: []pluginSpec{
+				{
+					ID:          p.ID,//"a8routing",
+					Label:       p.Label,//"a8routing",
+					Description: p.Description,//"Adds routing to different versions of a microservice",
+					Interfaces:  []string{"reporter", "controller"},
+					APIVersion:  "1",
+				},
+			},
+		}
 	}
+}
 
+func (p *Plugin) makeReport() (*report, error) {
+	var rpt *report
+	if p.ID == "a8routing" {
+		rpt = latestRouteReport
+	} else {
+		rpt = latestConnectionReport
+	}
 	return rpt, nil
 }
 
@@ -142,7 +201,7 @@ func (p *Plugin) latestControls() map[string]controlEntry {
 }
 
 func (p *Plugin) metricTemplates() map[string]metricTemplate {
-	id, name := p.metricIDAndName()
+	id, name := p.routingMetricIDAndName()
 	return map[string]metricTemplate{
 		id: {
 			ID:       id,
@@ -163,7 +222,7 @@ func getTableTemplate() map[string]tableTemplate {
 	}
 }
 
-func (p *Plugin) metricIDAndName() (string, string) {
+func (p *Plugin) routingMetricIDAndName() (string, string) {
 	return "routeamount", "Routing Weight"
 }
 
