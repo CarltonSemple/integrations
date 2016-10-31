@@ -14,7 +14,7 @@ import (
 // Get the routing weight for service+tags that match this service instance's tag
 // Using the Amalgam8 controller API
 func (p *Plugin) routingPercentage(service serviceInstance) (map[string]metric, float64, error) {
-	id, _ := p.metricIDAndName()
+	id, _ := p.routingMetricIDAndName()
 	value := 0.0
 
 	cmdArgs := []string{"-H 'Accept: application/json'","http://localhost:31200/v1/rules/routes/" + service.Name}
@@ -34,14 +34,14 @@ func (p *Plugin) routingPercentage(service serviceInstance) (map[string]metric, 
 		}
 		if len(rule.Route.Backends) == 1 {
 			//log.Println("only 1 backend")
-			value = 1.0 //100.0
+			value = 100.0 //1.0
 		} else {
 			for _, backend := range rule.Route.Backends {
 				weight := backend.Weight
 				for _, s := range backend.Tags {
 					for _, tag := range service.Tags {
 						if s == tag {
-							value = weight
+							value = weight * 100.0
 							if weight == 0 {
 								//log.Println("found tag, but weight is 0 or not present")
 								return nil, 0.0, nil
@@ -55,7 +55,7 @@ func (p *Plugin) routingPercentage(service serviceInstance) (map[string]metric, 
 										},
 									},
 									Min: 0,
-									Max: 1,
+									Max: 100,
 								},
 							}
 							return metrics, value, nil

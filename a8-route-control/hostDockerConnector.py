@@ -109,7 +109,7 @@ while 1:
             if not data: 
                 break
             #print data
-            print 'hostDockerConnector: sending reponse'
+            print 'hostDockerConnector: sending response'
             conn.send(data)
         conn.close()
     except SocketError as e:

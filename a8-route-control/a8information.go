@@ -17,6 +17,14 @@ import (
 *
 ***********/
 
+
+type EdgeMetadata struct {
+	EgressPacketCount  uint64 `json:"egress_packet_count,omitempty"`
+	IngressPacketCount uint64 `json:"ingress_packet_count,omitempty"`
+	EgressByteCount    uint64 `json:"egress_byte_count,omitempty"`  // Transport layer
+	IngressByteCount   uint64 `json:"ingress_byte_count,omitempty"` // Transport layer
+}
+
 // Value is typically the IP address of the service instance
 type serviceEndpoint struct {
 	Type string `json:type`
@@ -29,6 +37,9 @@ type serviceInstance struct {
 	Endpoint serviceEndpoint `json:endpoint`
 	Tags []string `json:tags`
 	ContainerID string `json:"containerid,omitempty"`
+	IPaddress string `json:"ip,omitempty"`
+	LatestAdjacencyList []string `json:"adjacencyList,omitempty"` //`json:"adjacencyList,omitempty"`
+	Edges map[string]EdgeMetadata `json:"edges,omitempty"`
 	Weight float64
 }
 
@@ -148,6 +159,7 @@ func getAmalgam8ContainerIds() {
 			if _, ok := serviceInstances[pa.IP]; ok { 
 				var tmp = serviceInstances[pa.IP]
 				tmp.ContainerID = pa.ID
+				tmp.IPaddress = pa.IP
 				serviceInstances[pa.IP] = tmp
 				m[pa.ID] = tmp
 				//log.Println(serviceInstances[pa.IP])
@@ -156,4 +168,17 @@ func getAmalgam8ContainerIds() {
 		serviceInstancesByContainerID = m
 		log.Println("Added Container IDs to Amalgam8 services")
 	}
+}
+
+// getServiceInstanceByAddress looks through the map of service instances (with container IDs as keys) and returns the instance with the desired IP address
+// returns empty, false if not found
+func getServiceInstanceByIPAddress(ipAddress string) (serviceInstance, bool) {
+	//log.Println("getServiceInstanceByAddress")
+	for _, sInstance := range serviceInstancesByContainerID {
+		if sInstance.IPaddress == ipAddress {
+			//log.Println("matched ", sInstance.IPaddress)
+			return sInstance, true
+		}
+	}
+	return serviceInstance{}, false
 }
