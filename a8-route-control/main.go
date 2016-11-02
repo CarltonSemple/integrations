@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"log"
 	"net"
@@ -12,6 +13,8 @@ import (
 )
 
 // Icons can be found at http://fontawesome.io/icons/
+
+const dependencyServerPort = ":8080"
 
 func main() {
 	serviceInstancesByContainerID = make(map[string]serviceInstance)
@@ -26,14 +29,45 @@ func main() {
 	)
 	flag.Parse()
 
+	log.Println(routingAddress)
 	log.Println(connectionsAddress)
+	log.Println(hostID)
 
 	go mainRoutingPlugin(routingAddress, hostID)
 	go mainConnectionsPlugin(connectionsAddress, hostID)
+	go userDependenciesServer()
 
 	for {
 		log.Println("HELLO FROM MAIN")
 		time.Sleep(5 * time.Second)
+	}
+}
+
+func userDependenciesServer() {
+	server := http.NewServeMux()
+	// sample::::::: curl localhost:8080/submit -d '{"gremlins":[{"scenario":"delay_requests","source":"reviews:v2","dest":"ratings:v1","delaytime":"7s"}]}'
+	server.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
+		log.Println(r.URL.String())
+
+		grmBody := GremlinContainer{}
+		err := json.NewDecoder(r.Body).Decode(&grmBody)
+		if err != nil {
+			log.Printf("Bad request: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		log.Println("gremlineeee")
+		log.Println(grmBody.Gremlins[0])
+
+		
+
+		raw, _ := json.Marshal(grmBody)
+		w.WriteHeader(http.StatusOK)
+		w.Write(raw)
+	})
+	if err := http.ListenAndServe(dependencyServerPort, server); err != nil {
+		log.Printf("error: %v", err)
 	}
 }
 
@@ -122,4 +156,15 @@ type request struct {
 
 type response struct {
 	ShortcutReport *report `json:"shortcutReport,omitempty"`
+}
+
+type GremlinContainer struct {
+	Gremlins []Gremlin `json:"gremlins"`
+}
+
+type Gremlin struct {
+	Scenario string `json:"scenario"`
+	Source string `json:"source"`
+	Dest string `json:"dest"`
+	Delaytime string `json:"delaytime"`
 }

@@ -39,6 +39,7 @@ type serviceInstance struct {
 	ContainerID string `json:"containerid,omitempty"`
 	IPaddress string `json:"ip,omitempty"`
 	LatestAdjacencyList []string `json:"adjacencyList,omitempty"` //`json:"adjacencyList,omitempty"`
+	DesiredAdjacencyList []string `json:"adjacencyListDesired,omitempty"`
 	Edges map[string]EdgeMetadata `json:"edges,omitempty"`
 	Weight float64
 }
@@ -106,7 +107,7 @@ func updateAmalgam8ServiceInstances() map[string]serviceInstance{
 	
 	// Get the IP address of each service
 	for _, serviceName := range svcResponse.Services {
-		var svcDetails serviceDetails
+		/*var svcDetails serviceDetails
 		//log.Println(serviceName)
 		cmdArgs = []string{"-H 'Accept: application/json'","http://localhost:31300/api/v1/services/" + serviceName}
 		nu, errrr := exec.Command("curl", cmdArgs...).Output()
@@ -114,10 +115,13 @@ func updateAmalgam8ServiceInstances() map[string]serviceInstance{
 			log.Fatal(errrr)
 		}
 		a := string(nu)
-		json.Unmarshal([]byte(a), &svcDetails)
+		json.Unmarshal([]byte(a), &svcDetails)*/
+		
+		foundInstances := GetServiceInstances(serviceName)
 
 		// Add each instance of the service to the list
-		for _, instance := range svcDetails.Instances {
+		//for _, instance := range svcDetails.Instances {
+		for _, instance := range foundInstances {
 			ip := strings.Split(instance.Endpoint.Value, ":")
 			m[ip[0]] = instance
 		}
@@ -181,4 +185,48 @@ func getServiceInstanceByIPAddress(ipAddress string) (serviceInstance, bool) {
 		}
 	}
 	return serviceInstance{}, false
+}
+
+// GetServiceInstances returns 
+func GetServiceInstances(serviceName string) []serviceInstance {
+	var svcDetails serviceDetails
+	cmdArgs := []string{"-H 'Accept: application/json'","http://localhost:31300/api/v1/services/" + serviceName}
+	nu, errrr := exec.Command("curl", cmdArgs...).Output()
+	if errrr != nil {
+		log.Fatal(errrr)
+	}
+	a := string(nu)
+	json.Unmarshal([]byte(a), &svcDetails)
+	return svcDetails.Instances
+	/*var addressList []Address
+
+	for _, instance := range svcDetails.Instances {
+		ipport := strings.Split(instance.Endpoint.Value, ":")
+		if len(ipport) != 2 {
+			log.Println("issue with splitting address")
+		}
+		addressList = append(addressList, Address{IP:ipport[0],Port:ipport[1]})
+	}
+	return addressList*/
+}
+
+// GetServiceVersionIPAddress returns the IP address from /api/v1/services/serviceName, along with the port
+func GetServiceVersionIPAddress(serviceName string, versionTag string) (string, string) {
+	foundInstances := GetServiceInstances(serviceName)
+	for _, instance := range foundInstances {
+		if listContains(instance.Tags, versionTag) == true {
+			ipport := strings.Split(instance.Endpoint.Value, ":")
+			return ipport[0], ipport[1]
+		}
+	}
+	return "", ""
+}
+
+func listContains(stringList []string, sInQuestion string) bool {
+	for _, x := range stringList {
+		if x == sInQuestion {
+			return true
+		}
+	}
+	return false
 }
