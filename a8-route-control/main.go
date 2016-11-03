@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,6 +19,7 @@ const dependencyServerPort = ":8080"
 
 func main() {
 	serviceInstancesByContainerID = make(map[string]serviceInstance)
+	desiredAdjacencyListsByServiceName = make(map[string][]string)
 	go hostDockerQuery()
 	go getAmalgam8ContainerIds()
 
@@ -34,8 +36,8 @@ func main() {
 	log.Println(hostID)
 
 	go mainRoutingPlugin(routingAddress, hostID)
-	go mainConnectionsPlugin(connectionsAddress, hostID)
-	go userDependenciesServer()
+	go mainConnectionsPlugin(connectionsAddress, hostID, "desired")
+	go userConnectionDependenciesServer()
 
 	for {
 		log.Println("HELLO FROM MAIN")
@@ -43,9 +45,9 @@ func main() {
 	}
 }
 
-func userDependenciesServer() {
+func userConnectionDependenciesServer() {
 	server := http.NewServeMux()
-	// sample::::::: curl localhost:8080/submit -d '{"gremlins":[{"scenario":"delay_requests","source":"reviews:v2","dest":"ratings:v1","delaytime":"7s"}]}'
+	// sample::::::: curl localhost:8080/submit -d '{"gremlins":[{"scenario":"delay_requests","source":"productpage:v1","dest":"ratings:v3","delaytime":"7s"}]}'
 	server.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL.String())
 
@@ -57,10 +59,28 @@ func userDependenciesServer() {
 			return
 		}
 
-		log.Println("gremlineeee")
+		log.Println("gremlineeee-----------------------------------------")
 		log.Println(grmBody.Gremlins[0])
 
-		
+		for _, grem := range grmBody.Gremlins {
+			for key, instance := range serviceInstancesByContainerID {
+				if instance.Name == strings.Split(grem.Source, ":")[0] && listContains(instance.Tags, strings.Split(grem.Source, ":")[1]) {
+					log.Println("***********************************************desired adjacency found for ", instance.Name)
+					tmp := instance
+					iiis := getServiceInstancesByName(strings.Split(grem.Dest, ":")[0], strings.Split(grem.Dest, ":")[1])
+					var insContainerIds []string
+					for _, ins := range iiis {
+						insContainerIds = append(insContainerIds, ins.ContainerID + ";<container>")
+					}
+					desiredAdjacencyListsByServiceName[tmp.Name] = insContainerIds //append(desiredAdjacencyListsByServiceName[tmp.Name], insContainerIds)//strings.Split(grem.Dest, ":")[0])
+					tmp.DesiredAdjacencyList = desiredAdjacencyListsByServiceName[tmp.Name]
+					serviceInstancesByContainerID[key] = tmp
+					log.Println(serviceInstancesByContainerID[key].DesiredAdjacencyList)
+					break
+				}
+			}
+			log.Println("************************************************next gremlin")
+		}
 
 		raw, _ := json.Marshal(grmBody)
 		w.WriteHeader(http.StatusOK)
@@ -71,7 +91,7 @@ func userDependenciesServer() {
 	}
 }
 
-func mainConnectionsPlugin(addr *string, hostID *string) {
+func mainConnectionsPlugin(addr *string, hostID *string, connectionsType string) {
 	log.Printf("Connections Plugin starting on %s...\n", *hostID)
 
 	go getLatestConnectingContainerIDs()
@@ -96,7 +116,7 @@ func mainConnectionsPlugin(addr *string, hostID *string) {
 
 	log.Printf("Listening on: unix://%s", *addr)
 
-	plugin := &Plugin{HostID: *hostID, ID: "a8connections", Label: "a8connections", Description: "Shows connections between microservices"}
+	plugin := &Plugin{ConnectionsType: connectionsType, HostID: *hostID, ID: "a8connections", Label: "a8connections", Description: "Shows connections between microservices"}
 	server := http.NewServeMux()
 	server.HandleFunc("/report", plugin.Report)
 	server.HandleFunc("/control", plugin.Control)
@@ -147,6 +167,8 @@ type Plugin struct {
 	ID string
 	Label string
 	Description string
+
+	ConnectionsType string
 }
 
 type request struct {

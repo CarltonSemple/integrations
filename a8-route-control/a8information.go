@@ -90,6 +90,8 @@ func hostDockerQuery() {
 // map of service instances, with the container ID as the key
 var serviceInstancesByContainerID map[string]serviceInstance
 
+var desiredAdjacencyListsByServiceName map[string][]string
+
 func updateAmalgam8ServiceInstances() map[string]serviceInstance{
 	log.Println("updateAmalgam8ServiceInstances")
 	m := make(map[string]serviceInstance) // IP addresses are the keys to the map of instances
@@ -106,17 +108,7 @@ func updateAmalgam8ServiceInstances() map[string]serviceInstance{
 	json.Unmarshal([]byte(s), &svcResponse)
 	
 	// Get the IP address of each service
-	for _, serviceName := range svcResponse.Services {
-		/*var svcDetails serviceDetails
-		//log.Println(serviceName)
-		cmdArgs = []string{"-H 'Accept: application/json'","http://localhost:31300/api/v1/services/" + serviceName}
-		nu, errrr := exec.Command("curl", cmdArgs...).Output()
-		if errrr != nil {
-			log.Fatal(errrr)
-		}
-		a := string(nu)
-		json.Unmarshal([]byte(a), &svcDetails)*/
-		
+	for _, serviceName := range svcResponse.Services {	
 		foundInstances := GetServiceInstances(serviceName)
 
 		// Add each instance of the service to the list
@@ -164,12 +156,17 @@ func getAmalgam8ContainerIds() {
 				var tmp = serviceInstances[pa.IP]
 				tmp.ContainerID = pa.ID
 				tmp.IPaddress = pa.IP
+
+				// update desired adjacency list
+				tmp.DesiredAdjacencyList = desiredAdjacencyListsByServiceName[tmp.Name]
+				
 				serviceInstances[pa.IP] = tmp
 				m[pa.ID] = tmp
 				//log.Println(serviceInstances[pa.IP])
 			}
 		}
 		serviceInstancesByContainerID = m
+		
 		log.Println("Added Container IDs to Amalgam8 services")
 	}
 }
@@ -187,6 +184,17 @@ func getServiceInstanceByIPAddress(ipAddress string) (serviceInstance, bool) {
 	return serviceInstance{}, false
 }
 
+// getServiceInstancesByName looks through the map of service instances and returns the ones that have the same name
+func getServiceInstancesByName(name string, versionTag string) []serviceInstance {
+	var instances []serviceInstance
+	for _, sInstance := range serviceInstancesByContainerID {
+		if sInstance.Name == name && listContains(sInstance.Tags, versionTag) {
+			instances = append(instances, sInstance)
+		}
+	}
+	return instances
+}
+
 // GetServiceInstances returns 
 func GetServiceInstances(serviceName string) []serviceInstance {
 	var svcDetails serviceDetails
@@ -198,16 +206,6 @@ func GetServiceInstances(serviceName string) []serviceInstance {
 	a := string(nu)
 	json.Unmarshal([]byte(a), &svcDetails)
 	return svcDetails.Instances
-	/*var addressList []Address
-
-	for _, instance := range svcDetails.Instances {
-		ipport := strings.Split(instance.Endpoint.Value, ":")
-		if len(ipport) != 2 {
-			log.Println("issue with splitting address")
-		}
-		addressList = append(addressList, Address{IP:ipport[0],Port:ipport[1]})
-	}
-	return addressList*/
 }
 
 // GetServiceVersionIPAddress returns the IP address from /api/v1/services/serviceName, along with the port

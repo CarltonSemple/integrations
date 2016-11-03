@@ -81,7 +81,11 @@ func (p *Plugin) makeReport() (*report, error) {
 	m := make(map[string]node)
 	log.Println("making ", p.ID, " report")
 
+	if len(serviceInstancesByContainerID) == 0 {
+		log.Println("no services found")
+	}
 	for _, v := range serviceInstancesByContainerID {
+		
 		key := v.ContainerID + ";<container>"
 		switch {
 			case p.ID == "a8routing": {
@@ -104,11 +108,20 @@ func (p *Plugin) makeReport() (*report, error) {
 				}
 			}
 			case p.ID == "a8connections": {
-				m[key] = node { 
-					LatestControls: p.latestControls(),
-					AdjacencyList: v.LatestAdjacencyList, //[]string{""},
-					Edges: v.Edges,
-					Rank: "8",
+				//log.Println("desired list:")
+				//log.Println(v.DesiredAdjacencyList)
+				if p.ConnectionsType == "actual" {
+					m[key] = node { 
+						LatestControls: p.latestControls(),
+						AdjacencyList: v.LatestAdjacencyList,
+						Rank: "8",
+					}
+				} else {
+					m[key] = node { 
+						LatestControls: p.latestControls(),
+						AdjacencyList: v.DesiredAdjacencyList,
+						Rank: "8",
+					}
 				}
 			}
 		}
