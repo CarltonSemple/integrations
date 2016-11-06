@@ -36,7 +36,7 @@ func main() {
 	log.Println(hostID)
 
 	go mainRoutingPlugin(routingAddress, hostID)
-	go mainConnectionsPlugin(connectionsAddress, hostID, "desired")
+	go mainConnectionsPlugin(connectionsAddress, hostID, false)
 	go userConnectionDependenciesServer()
 
 	for {
@@ -47,7 +47,7 @@ func main() {
 
 func userConnectionDependenciesServer() {
 	server := http.NewServeMux()
-	// sample::::::: curl localhost:8080/submit -d '{"gremlins":[{"scenario":"delay_requests","source":"productpage:v1","dest":"ratings:v3","delaytime":"7s"}]}'
+	// sample::::::: curl localhost:8080/submit -d '{"gremlins":[{"scenario":"delay_requests","source":"productpage:v1","dest":"ratings:v1","delaytime":"7s"}]}'
 	server.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL.String())
 
@@ -91,7 +91,7 @@ func userConnectionDependenciesServer() {
 	}
 }
 
-func mainConnectionsPlugin(addr *string, hostID *string, connectionsType string) {
+func mainConnectionsPlugin(addr *string, hostID *string, actualConnections bool) {
 	log.Printf("Connections Plugin starting on %s...\n", *hostID)
 
 	go getLatestConnectingContainerIDs()
@@ -116,7 +116,7 @@ func mainConnectionsPlugin(addr *string, hostID *string, connectionsType string)
 
 	log.Printf("Listening on: unix://%s", *addr)
 
-	plugin := &Plugin{ConnectionsType: connectionsType, HostID: *hostID, ID: "a8connections", Label: "a8connections", Description: "Shows connections between microservices"}
+	plugin := &Plugin{ActualConnections: actualConnections, HostID: *hostID, ID: "a8connections", Label: "a8connections", Description: "Shows connections between microservices"}
 	server := http.NewServeMux()
 	server.HandleFunc("/report", plugin.Report)
 	server.HandleFunc("/control", plugin.Control)
@@ -168,7 +168,7 @@ type Plugin struct {
 	Label string
 	Description string
 
-	ConnectionsType string
+	ActualConnections bool
 }
 
 type request struct {

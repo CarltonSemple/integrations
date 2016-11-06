@@ -110,13 +110,15 @@ func (p *Plugin) makeReport() (*report, error) {
 			case p.ID == "a8connections": {
 				//log.Println("desired list:")
 				//log.Println(v.DesiredAdjacencyList)
-				if p.ConnectionsType == "actual" {
+				if p.ActualConnections == true {
+					//log.Println("sending actual adjacency list")
 					m[key] = node { 
 						LatestControls: p.latestControls(),
 						AdjacencyList: v.LatestAdjacencyList,
 						Rank: "8",
 					}
 				} else {
+					//log.Println("sending desired adjacency list")
 					m[key] = node { 
 						LatestControls: p.latestControls(),
 						AdjacencyList: v.DesiredAdjacencyList,
