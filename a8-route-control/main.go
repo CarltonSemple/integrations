@@ -49,7 +49,7 @@ func main() {
 
 func userConnectionDependenciesServer() {
 	server := http.NewServeMux()
-	// sample::::::: curl localhost:8080/submit -d '{"gremlins":[{"scenario":"delay_requests","source":"productpage:v1","dest":"ratings:v1","delaytime":"7s"}]}'
+	// sample::::::: curl localhost:3000/submit -d '{"gremlins":[{"scenario":"delay_requests","source":"productpage:v1","dest":"ratings:v1","delaytime":"7s"}]}'
 	server.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL.String())
 
