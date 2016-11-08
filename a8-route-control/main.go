@@ -36,7 +36,7 @@ func main() {
 	log.Println(hostID)
 
 	go mainRoutingPlugin(routingAddress, hostID)
-	go mainConnectionsPlugin(connectionsAddress, hostID, false)
+	go mainConnectionsPlugin(connectionsAddress, hostID, true)
 	go userConnectionDependenciesServer()
 
 	for {
