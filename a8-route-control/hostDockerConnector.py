@@ -79,7 +79,7 @@ def getDockerID_IP_PodName():
                     karray.append(pair)
         #print "\n\n\n\n"
         print "kubernetes"
-        #print json.dumps(karray)
+        print json.dumps(karray)
         #print "\n\n\n"
         return json.dumps(karray)
     else:       

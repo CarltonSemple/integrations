@@ -62,7 +62,7 @@ func getLatestConnectingContainerIDs() {
                         tmp := svcInstance
                         serviceInstancesByContainerID[svcInstance.ContainerID] = tmp
                         log.Println(tmp.ContainerID, " -> ", serviceInstancesByContainerID[tmp.ContainerID].LatestAdjacencyList)//.Edges)
-                        break
+                        //break
                     }
                 //}
             }

@@ -76,8 +76,12 @@ type pluginSpec struct {
 	APIVersion  string   `json:"api_version,omitempty"`
 }
 
-func (p *Plugin) makeReport() (*report, error) {
-	// Add the container IDs to the map of nodes in the report
+var latestRouteReport *report
+var latestConnectionReport *report 
+
+func (p *Plugin) buildLatestReport() {
+	log.Println("build latest ........................................................")
+		// Add the container IDs to the map of nodes in the report
 	m := make(map[string]node)
 	log.Println("making ", p.ID, " report")
 
@@ -89,14 +93,14 @@ func (p *Plugin) makeReport() (*report, error) {
 		key := v.ContainerID + ";<container>"
 		switch {
 			case p.ID == "a8routing": {
-				metrics, weightValue, err := p.routingPercentage(v)
+				metrics, weightValue, _ := p.routingPercentage(v)
 				if metrics == nil {
 					//log.Println("skipping")
 					continue
-				}
+				}/*
 				if err != nil {
 					return nil, err
-				}
+				}*/
 				v.Weight = weightValue
 				//log.Println(v.Weight)
 				p.routesEnabled = true
@@ -108,44 +112,77 @@ func (p *Plugin) makeReport() (*report, error) {
 				}
 			}
 			case p.ID == "a8connections": {
-				//log.Println("desired list:")
-				//log.Println(v.DesiredAdjacencyList)
 				if p.ActualConnections == true {
-					//log.Println("sending actual adjacency list")
-					m[key] = node { 
-						LatestControls: p.latestControls(),
-						AdjacencyList: v.LatestAdjacencyList,
-						Rank: "8",
+					if len(v.LatestAdjacencyList) > 0 {
+						log.Println("adjacency list:")
+						log.Println(v.LatestAdjacencyList)
+						m[key] = node { 
+							LatestControls: p.latestControls(),
+							AdjacencyList: v.LatestAdjacencyList,
+							Rank: "8",
+						}
 					}
 				} else {
-					//log.Println("sending desired adjacency list")
-					m[key] = node { 
-						LatestControls: p.latestControls(),
-						AdjacencyList: v.DesiredAdjacencyList,
-						Rank: "8",
+					if len(v.DesiredAdjacencyList) > 0 {
+						log.Println("adjacency list:")
+						log.Println(v.DesiredAdjacencyList)
+						m[key] = node { 
+							LatestControls: p.latestControls(),
+							AdjacencyList: v.DesiredAdjacencyList,
+							Rank: "8",
+						}
 					}
 				}
 			}
 		}
 	}
-	rpt := &report{
-		Container: topology{
-			Nodes: m,
-			MetricTemplates: p.metricTemplates(),
-			Controls:        p.controls(),
-			//TableTemplates: getTableTemplate(),
-		},
-		Plugins: []pluginSpec{
-			{
-				ID:          p.ID,//"a8routing",
-				Label:       p.Label,//"a8routing",
-				Description: p.Description,//"Adds routing to different versions of a microservice",
-				Interfaces:  []string{"reporter", "controller"},
-				APIVersion:  "1",
-			},
-		},
-	}
 
+	if p.ID == "a8routing" {
+		latestRouteReport = &report{
+			Container: topology{
+				Nodes: m,
+				MetricTemplates: p.metricTemplates(),
+				Controls:        p.controls(),
+				//TableTemplates: getTableTemplate(),
+			},
+			Plugins: []pluginSpec{
+				{
+					ID:          p.ID,//"a8routing",
+					Label:       p.Label,//"a8routing",
+					Description: p.Description,//"Adds routing to different versions of a microservice",
+					Interfaces:  []string{"reporter", "controller"},
+					APIVersion:  "1",
+				},
+			},
+		}
+	} else {
+		latestConnectionReport = &report{
+			Container: topology{
+				Nodes: m,
+				MetricTemplates: p.metricTemplates(),
+				Controls:        p.controls(),
+				//TableTemplates: getTableTemplate(),
+			},
+			Plugins: []pluginSpec{
+				{
+					ID:          p.ID,//"a8routing",
+					Label:       p.Label,//"a8routing",
+					Description: p.Description,//"Adds routing to different versions of a microservice",
+					Interfaces:  []string{"reporter", "controller"},
+					APIVersion:  "1",
+				},
+			},
+		}
+	}
+}
+
+func (p *Plugin) makeReport() (*report, error) {
+	var rpt *report
+	if p.ID == "a8routing" {
+		rpt = latestRouteReport
+	} else {
+		rpt = latestConnectionReport
+	}
 	return rpt, nil
 }
 

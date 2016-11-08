@@ -15,11 +15,13 @@ import (
 
 // Icons can be found at http://fontawesome.io/icons/
 
-const dependencyServerPort = ":8080"
+const dependencyServerPort = ":3000"
 
 func main() {
 	serviceInstancesByContainerID = make(map[string]serviceInstance)
 	desiredAdjacencyListsByServiceName = make(map[string][]string)
+	latestRouteReport = &report{}
+	latestConnectionReport = &report{}
 	go hostDockerQuery()
 	go getAmalgam8ContainerIds()
 
@@ -36,7 +38,7 @@ func main() {
 	log.Println(hostID)
 
 	go mainRoutingPlugin(routingAddress, hostID)
-	go mainConnectionsPlugin(connectionsAddress, hostID, false)
+	go mainConnectionsPlugin(connectionsAddress, hostID, true)
 	go userConnectionDependenciesServer()
 
 	for {
@@ -117,6 +119,7 @@ func mainConnectionsPlugin(addr *string, hostID *string, actualConnections bool)
 	log.Printf("Listening on: unix://%s", *addr)
 
 	plugin := &Plugin{ActualConnections: actualConnections, HostID: *hostID, ID: "a8connections", Label: "a8connections", Description: "Shows connections between microservices"}
+	go buildReports(plugin)
 	server := http.NewServeMux()
 	server.HandleFunc("/report", plugin.Report)
 	server.HandleFunc("/control", plugin.Control)
@@ -149,11 +152,19 @@ func mainRoutingPlugin(addr *string, hostID *string) {
 	log.Printf("Listening on: unix://%s", *addr)
 
 	plugin := &Plugin{HostID: *hostID, ID: "a8routing", Label: "a8routing", Description: "Adds routing to different versions of a microservice"}
+	go buildReports(plugin)
 	server := http.NewServeMux()
 	server.HandleFunc("/report", plugin.Report)
 	server.HandleFunc("/control", plugin.Control)
 	if err := http.Serve(listener, server); err != nil {
 		log.Printf("error: %v", err)
+	}
+}
+
+func buildReports(p *Plugin) {
+	for {
+		p.buildLatestReport()
+		time.Sleep(2 * time.Second)
 	}
 }
 
