@@ -15,7 +15,7 @@ import (
 
 // Icons can be found at http://fontawesome.io/icons/
 
-const dependencyServerPort = ":8080"
+const dependencyServerPort = ":3000"
 
 func main() {
 	serviceInstancesByContainerID = make(map[string]serviceInstance)
