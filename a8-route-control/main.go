@@ -22,7 +22,6 @@ func main() {
 	desiredAdjacencyListsByServiceName = make(map[string][]string)
 	latestRouteReport = &report{}
 	latestConnectionReport = &report{}
-	go hostDockerQuery()
 	go getAmalgam8ContainerIds()
 
 	hostname, _ := os.Hostname()
@@ -39,11 +38,11 @@ func main() {
 
 	go mainRoutingPlugin(routingAddress, hostID)
 	go mainConnectionsPlugin(connectionsAddress, hostID, true)
-	go userConnectionDependenciesServer()
+	//go userConnectionDependenciesServer()
 
 	for {
 		log.Println("HELLO FROM MAIN")
-		time.Sleep(5 * time.Second)
+		time.Sleep(100 * time.Second)
 	}
 }
 

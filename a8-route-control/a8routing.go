@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
     "log"
 	"net/http"
+	"os"
     "os/exec"
 	"strings"
     "time"
@@ -17,7 +18,7 @@ func (p *Plugin) routingPercentage(service serviceInstance) (map[string]metric, 
 	id, _ := p.routingMetricIDAndName()
 	value := 0.0
 
-	cmdArgs := []string{"-H 'Accept: application/json'","http://localhost:31200/v1/rules/routes/" + service.Name}
+	cmdArgs := []string{"-H 'Accept: application/json'", os.Getenv("A8_CONTROLLER_URL") + "/v1/rules/routes/" + service.Name}
 	nu, errrr := exec.Command("curl", cmdArgs...).Output()
 	if errrr != nil {
 		log.Fatal(errrr)
@@ -97,7 +98,7 @@ type RulesList struct {
 }
 
 func getRouteList(serviceName string) RulesList {
-	cmdArgs := []string{"-H 'Accept: application/json'","http://localhost:31200/v1/rules/routes/" + serviceName}
+	cmdArgs := []string{"-H 'Accept: application/json'", os.Getenv("A8_CONTROLLER_URL") + "/v1/rules/routes/" + serviceName}
 	nu, errrr := exec.Command("curl", cmdArgs...).Output()
 	if errrr != nil {
 		log.Fatal(errrr)
@@ -112,7 +113,7 @@ func clearRoutes(NodeId string) {
 	idParts := strings.Split(NodeId, ";")
 	name := serviceInstancesByContainerID[idParts[0]].Name
 	log.Println("Clearing routes for " + name)
-	req, _ := http.NewRequest("DELETE", "http://localhost:31200/v1/rules/routes/" + name, nil)
+	req, _ := http.NewRequest("DELETE", os.Getenv("A8_CONTROLLER_URL") + "/v1/rules/routes/" + name, nil)
 	_, _ = http.DefaultClient.Do(req)
 }
 
@@ -137,7 +138,7 @@ func adjustWeight(NodeId string, changeAmount float64) {
 		routes.Rules[0].Route.Backends = newBackends
 		body, _ := json.Marshal(routes)
 		log.Println(string(body))
-		req, _ := http.NewRequest("PUT", "http://localhost:31200/v1/rules/routes/" + serviceName, bytes.NewBuffer([]byte(string(body))))
+		req, _ := http.NewRequest("PUT", os.Getenv("A8_CONTROLLER_URL") + "/v1/rules/routes/" + serviceName, bytes.NewBuffer([]byte(string(body))))
 		req.Header.Set("Content-Type", "application/json")
 		resp, _ := http.DefaultClient.Do(req)
 		rbody, _ := ioutil.ReadAll(resp.Body)
