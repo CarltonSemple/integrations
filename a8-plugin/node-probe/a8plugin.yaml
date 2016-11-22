@@ -1,0 +1,34 @@
+apiVersion: extensions/v1beta1
+kind: Deployment 
+metadata: 
+  name: a8-plugin
+  labels: 
+    app: a8-plugin
+spec: 
+  template: 
+    metadata: 
+      labels: 
+        app: a8-plugin
+        name: a8-plugin
+    spec: 
+      containers: 
+        - name: a8plugin
+          image: 'csemp/a8plugin2'
+          imagePullPolicy: Always
+          #args: 
+          securityContext: 
+            privileged: true
+          volumeMounts: 
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+            - name: scope-plugins
+              mountPath: /var/run/scope/plugins
+      volumes: 
+        - name: docker-socket 
+          hostPath:
+            path: /var/run/docker.sock
+        - name: scope-plugins
+          hostPath: 
+            path: /var/run/scope/plugins
+        #hostPID: true
+        #hostNetwork: true
