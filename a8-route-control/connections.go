@@ -18,10 +18,16 @@ import (
 func getLatestConnectingContainerIDs() {
     for {
         time.Sleep(5 * time.Second)
-        log.Println("getLatestConnectingContainerIDs")
+        log.Println("getLatestConnectingContainerIDs()")
         //log.Println("getting connections for ", serviceInstance.ContainerID)
 
         //log.Println(len(serviceInstancesByContainerID), " service instances detected")
+        if len(serviceInstancesByContainerID) == 0 {
+            log.Println("no service instances found")
+            continue
+        }
+
+        log.Println("service instances found")
 
         body := ""
         for _, sInstance := range serviceInstancesByContainerID {

@@ -27,5 +27,6 @@ You must have Weave Scope installed and running. You can find the instructions o
 
 ## Installing the Amalgam8 Route Control Plugin
 
-* Use *make* to build and run.  
+* Use *make* to build.  
+* Use *make run* to run.
 * Use *make clean* to remove the image.
