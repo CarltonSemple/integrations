@@ -2,6 +2,7 @@ package main
 
 import (
     "encoding/json"
+    "fmt"
     "log"
     "os"
     "os/exec"
@@ -22,7 +23,10 @@ type ConnectionsHolder struct {
 
 func getLatestA8ContainerConnectionInformation(containersByIP map[string]ContainerSimple) (map[string][]ContainerConnection, map[string]serviceInstance, error) {
     var connectionsByIPAddress = make(map[string][]ContainerConnection)
-    a8ServiceInstances := getAmalgam8ServiceInstancesByIPAddress()
+    a8ServiceInstances, err := getAmalgam8ServiceInstancesByIPAddress()
+    if err != nil {
+        return connectionsByIPAddress, a8ServiceInstances, fmt.Errorf("getLatestA8ContainerConnectionInformation: ", err)
+    }
     body := ""
     for _, container := range containersByIP {
         ipAddress := container.IP

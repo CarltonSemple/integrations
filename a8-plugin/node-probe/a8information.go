@@ -2,6 +2,7 @@ package main
 
 import (
     "encoding/json"
+	"fmt"
     "log"
 	"os"
     "os/exec"
@@ -13,14 +14,49 @@ import (
 
 //}
 
+func getAmalgam8ServiceInstancesByContainerID(containers ...ContainerSimple) (map[string]serviceInstance, error) {
+	instancesByContainerID := make(map[string]serviceInstance)
+	instancesByIP, err := getAmalgam8ServiceInstancesByIPAddress()
+	if err != nil {
+		return instancesByContainerID, fmt.Errorf("getAmalgam8ServiceInstancesByContainerID: ", err)
+	}
+	for _, container := range containers {
+		ipAddress := container.IP
+		// Check to see if this container is in the collection of Amalgam8 services
+		if _, ok := instancesByIP[ipAddress]; ok { 
+			instance := instancesByIP[ipAddress]
+			instance.ContainerID = container.ID
+			instancesByContainerID[container.ID] = instance
+		}
+	}
+	return instancesByContainerID, nil
+}
+
+func filterOutSidecarContainers(containers ...ContainerSimple) []ContainerSimple {
+    newContainers := []ContainerSimple{}
+    for _, c := range containers{
+        if c.Name != "servicereg" && c.Name != "serviceproxy" {
+            newContainers = append(newContainers, c)
+        }
+    }
+    return newContainers
+}
+
 func filterToAmalgam8Containers(containers ...ContainerSimple) ([]ContainerSimple, map[string]ContainerSimple, error){
 	log.Println("filterToAmalgam8Containers()")
 
 	containerMapByIPAddress := make(map[string]ContainerSimple)
 	var newContainerList []ContainerSimple
-	amalgam8ServiceInstances := getAmalgam8ServiceInstancesByIPAddress()
+	amalgam8ServiceInstances, err := getAmalgam8ServiceInstancesByIPAddress()
+	if err != nil {
+		return newContainerList, containerMapByIPAddress, fmt.Errorf("filterToAmalgam8Containers: ", err)
+	}
 
-	for _, container := range containers {
+	filteredContainers := filterOutSidecarContainers(containers...)
+	//log.Println("filteredContainers: ")
+	//log.Println(filteredContainers)
+
+	for _, container := range filteredContainers {
 		ipAddress := container.IP
 
 		// Check to see if this container is in the collection of Amalgam8 services
@@ -32,13 +68,13 @@ func filterToAmalgam8Containers(containers ...ContainerSimple) ([]ContainerSimpl
 	return newContainerList, containerMapByIPAddress, nil
 }
 
-func getAmalgam8ServiceInstancesByIPAddress() map[string]serviceInstance {
+func getAmalgam8ServiceInstancesByIPAddress() (map[string]serviceInstance, error) {
 	//log.Println("getAmalgam8ServiceInstancesByIPAddress")
 	m := make(map[string]serviceInstance) // IP addresses are the keys to the map of instances
 	cmdArgs := []string{"-H 'Accept: application/json'",os.Getenv("A8_REGISTRY_URL") + "/api/v1/services"}
 	o, errrr := exec.Command("curl", cmdArgs...).Output()
 	if errrr != nil {
-		log.Println("no services received")
+		return m, fmt.Errorf("no services received")
 	}
 	s := string(o)
 	var svcResponse serviceListResponse
@@ -55,7 +91,7 @@ func getAmalgam8ServiceInstancesByIPAddress() map[string]serviceInstance {
 			m[ip[0]] = instance
 		}
 	}
-	return m
+	return m, nil
 }
 
 // GetServiceInstances returns 
