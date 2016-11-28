@@ -11,12 +11,37 @@ import (
 )
 
 const (
-    containerTag = ";<container>"
+    containerChannelSize = 3
 )
+var containersChannel = make(chan []ContainerSimple, containerChannelSize)
 
 func buildConnectionReports(connectionsPlugin *Plugin) {
     log.Println("buildConnectionReports")
-	config, err := rest.InClusterConfig()
+    connectionsPlugin.LatestReport = &report{
+        Container: topology{
+            MetricTemplates: connectionsPlugin.metricTemplates(),
+        },
+        Plugins: []pluginSpec{
+            {
+                ID:          "a8connections",
+                Label:       "a8connections",
+                Description:  "Shows connections between microservices",
+                Interfaces:  []string{"reporter"},
+                APIVersion:  "1",
+            },
+        },
+    }
+    for {
+        err := connectionsPlugin.generateLatestActualConnectionsReport()
+        if err != nil {
+            log.Println("generateLatestActualConnectionsReport: ", err)
+        }
+        time.Sleep(5 * time.Second)
+    }
+}
+
+func updateContainersCollection() {
+    config, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
 	}
@@ -24,33 +49,36 @@ func buildConnectionReports(connectionsPlugin *Plugin) {
 	if err != nil {
 		panic(err.Error())
 	}
-    log.Println("starting connections loop")
     for {
-        err := connectionsPlugin.generateLatestActualConnectionsReport(clientset)
+        containers, err := GetContainersFromKubernetesGoClient(clientset)
         if err != nil {
-            log.Println("generateLatestActualConnectionsReport: ", err)
-        } 
-        time.Sleep(5 * time.Second)
+            log.Println("updateContainersCollection: ", err)
+        }
+        if len(containersChannel) == containerChannelSize {
+            <- containersChannel
+        }
+        containersChannel <- containers
+        time.Sleep(containerRefreshRate_seconds * time.Second)
     }
 }
 
-func (p *Plugin) generateLatestActualConnectionsReport(clientset *kubernetes.Clientset) error {
+func (p *Plugin) generateLatestActualConnectionsReport() error {
     log.Println("generateLatestActualConnectionsReport")
     m := make(map[string]node)
-    containers, err := GetContainersFromKubernetesGoClient(clientset)
-    if err != nil {
-        log.Println("GetContainersFromKubernetes: ", err)
+    if len(containersChannel) > 0 {
+        p.Containers = <- containersChannel
     }
-    filteredContainers := filterOutSidecarContainers(containers...)
-    log.Println("filtered containers:")
-    log.Println(filteredContainers)
-    var containersByIPAddress map[string]ContainerSimple
-    containers, containersByIPAddress, err = filterToAmalgam8Containers(filteredContainers...)
+    //filteredContainers := filterOutSidecarContainers(p.Containers...)
+    //// Moved to filterToAmalgam8Containers()
+    _, containersByIPAddress, err := filterToAmalgam8Containers(p.Containers...)
     if err != nil {
         log.Println("1: ", err)
         return err
     }
-    connectionsByIPAddress, serviceInstances, _ := getLatestA8ContainerConnectionInformation(containersByIPAddress)
+    connectionsByIPAddress, serviceInstances, err := getLatestA8ContainerConnectionInformation(containersByIPAddress)
+    if err != nil {
+        return err
+    }
     _, err = json.Marshal(connectionsByIPAddress)
     if err != nil {
         log.Println("2: ", err)
@@ -62,19 +90,16 @@ func (p *Plugin) generateLatestActualConnectionsReport(clientset *kubernetes.Cli
         return nil
     }
 
-    log.Println("iterating through serviceInstances")
-
     for _, instance := range serviceInstances {
         serviceIPaddress := instance.GetIPAddress()
         // attach to each container with this ip address
         connections, ok := connectionsByIPAddress[serviceIPaddress]
         if ok {
-            log.Println(len(connections))
+            //log.Println(len(connections))
             instance.LatestAdjacencyList = []string{}
             for _, connection := range connections {
                 key := connection.SourceDockerID + containerTag
                 log.Println("key:", key)
-                //instance.toLatestAdjacencyList([]string{connection.destinationDockerID})
                 instance.LatestAdjacencyList = append(instance.LatestAdjacencyList, connection.DestinationDockerID + containerTag)
                 if len(instance.LatestAdjacencyList) > 0 {
                     log.Println("adjacency list:")
@@ -82,7 +107,7 @@ func (p *Plugin) generateLatestActualConnectionsReport(clientset *kubernetes.Cli
                 }
                 m[key] = node { 
                     AdjacencyList: instance.LatestAdjacencyList,
-                    Rank: "8",
+                    //Rank: "8",
                 }
             }
         }
@@ -124,7 +149,7 @@ func (p *Plugin) metricTemplates() map[string]metricTemplate {
 		id: {
 			ID:       id,
 			Label:    name,
-			DataType: "",
+			DataType: "",//Format:   "percent",
 			Priority: 0.1,
 		},
 	}
@@ -151,83 +176,4 @@ func (p *Plugin) Report(w http.ResponseWriter, r *http.Request) {
 	//log.Println(string(raw))
 	w.WriteHeader(http.StatusOK)
 	w.Write(raw)
-}
-
-func filterOutSidecarContainers(containers ...ContainerSimple) []ContainerSimple {
-    newContainers := []ContainerSimple{}
-    for _, c := range containers{
-        if c.Name != "servicereg" && c.Name != "serviceproxy" {
-            newContainers = append(newContainers, c)
-        }
-    }
-    return newContainers
-}
-
-type report struct {
-	Container    topology
-	Plugins []pluginSpec
-}
-
-type topology struct {
-	Nodes           map[string]node           `json:"nodes"`
-	MetricTemplates map[string]metricTemplate `json:"metric_templates"`//`json:"metadata_templates,omitempty"`//
-	Controls        map[string]control        `json:"controls"`
-	TableTemplates 	map[string]tableTemplate  `json:"table_templates,omitempty"`
-}
-
-type tableTemplate struct {
-	ID     string `json:"id"`
-	Label  string `json:"label"`
-	Prefix string `json:"prefix"`
-}
-
-type node struct {
-	Metrics        map[string]metric       `json:"metrics"`
-	LatestControls map[string]controlEntry `json:"latestControls,omitempty"`
-	AdjacencyList []string `json:"adjacency",omitempty`
-	Edges map[string]EdgeMetadata `json:"edges,omitempty"`
-	Rank string `json:rank,omitempty`
-}
-
-type metric struct {
-	Samples []sample `json:"samples,omitempty"`
-	Min     float64  `json:"min"`
-	Max     float64  `json:"max"`
-}
-
-type sample struct {
-	Date  time.Time `json:"date"`
-	Value float64   `json:"value"`
-}
-
-type controlEntry struct {
-	Timestamp time.Time   `json:"timestamp"`
-	Value     controlData `json:"value"`
-}
-
-type controlData struct {
-	Dead bool `json:"dead"`
-}
-
-type metricTemplate struct {
-	ID       string  `json:"id"`
-	Label    string  `json:"label,omitempty"`
-	DataType string  `json:"dataType,omitempty"`
-	Format   string  `json:"format,omitempty"`
-	Priority float64 `json:"priority,omitempty"`
-}
-
-type control struct {
-	ID    string `json:"id"`
-	Human string `json:"human"`
-	Icon  string `json:"icon"`
-	Rank  int    `json:"rank"`
-}
-
-type pluginSpec struct {
-	ID          string   `json:"id"`
-	Label       string   `json:"label"`
-	Description string   `json:"description,omitempty"`
-	Interfaces  []string `json:"interfaces"`
-	APIVersion  string   `json:"api_version,omitempty"`
 }
